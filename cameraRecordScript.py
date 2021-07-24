@@ -4,11 +4,12 @@ from datetime import datetime
 from time import sleep
 import threading
 from time import time
+import sys
 
 pir = MotionSensor(17, queue_len = 1, threshold = 0.2, sample_rate = 50)
 camera = PiCamera()
 
-timeout = 15
+timeout = 15 if len(sys.argv) == 1 else sys.argv[1]
 
 timeStampLock = threading.Lock()
 currentlyRecordingLock = threading.Lock()
