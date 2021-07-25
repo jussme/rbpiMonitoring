@@ -5,73 +5,87 @@ from time import sleep
 import threading
 from time import time
 import sys
+import logging
 
 pir = MotionSensor(17, queue_len = 1, threshold = 0.2, sample_rate = 50)
 camera = PiCamera()
 
 timeout = 15 if len(sys.argv) == 1 else sys.argv[1]
 
-timeStampLock = threading.Lock()
-currentlyRecordingLock = threading.Lock()
+try:
+    logging.basicConfig(filename='logFile.log', level=logging.INFO)
+except PermissionError:
+    print('Permissions unsufficient to create a log file in pwd')
 
-currentlyRecording = False
+def logWithDate(message):
+    logging.info(datetime.now().strftime('%H%M%S_%d%m%Y') + '\t' + message)
 
-currentTimeStamp = 10
+logWithDate('\n\nStarting program')
 
-def dummyFunc():
-    for x in range(0, 2):
-        y = x+2
-
-recordingThread = threading.Thread(target = dummyFunc)
+class State:
+    def __init__(self):
+        self._latestTimeStamp = 10
+        self._currentlyRecording = False
+        self._timeStampLock = threading.Lock()
+        self._currentlyRecordingLock = threading.Lock()
+    
+    def getLatestTimeStamp(self):
+        logWithDate('getLatestTimeStamp returns' + str(self._latestTimeStamp))
+        self._timeStampLock.acquire()
+        latestTimeStamp = self._latestTimeStamp
+        self._timeStampLock.release()
+        return latestTimeStamp
+    
+    def setLatestTimeStamp(self, timeStamp):
+        logWithDate('setLatestTimeStamp to ' + str(timeStamp))
+        self._timeStampLock.acquire()
+        self._latestTimeStamp = timeStamp
+        self._timeStampLock.release()
+        
+    def getCurrentlyRecording(self):#prob doesnt do much, a change can slip in
+        logWithDate('getCurrentlyRecording returns ' + str(self._currentlyRecording))
+        self._currentlyRecordingLock.acquire()
+        currentlyRecording = self._currentlyRecording
+        self._currentlyRecordingLock.release()
+        return currentlyRecording
+    
+    def setCurrentlyRecording(self, state):
+        logWithDate('setCurrentlyRecording to ' + str(state))
+        self._currentlyRecordingLock.acquire()
+        self._currentlyRecording = state
+        self._currentlyRecordingLock.release()
+    
+state = State()
 
 def startRecording(device):
-    global currentlyRecording
-    global currentTimeStamp
-    print('Movement detected..')
-    currentlyRecordingLock.acquire()
-    if not currentlyRecording:        
-        now = datetime.now()
-        filenameRep = now.strftime('%H%M%S_%d%m%Y')
-        camera.start_recording('./' + filenameRep + '.h264')
-        currentlyRecording = True
-        currentlyRecordingLock.release()
-        print('Recording' + filenameRep)
-    else:
-        currentlyRecordingLock.release()
-    timeStampLock.acquire()
-    currentTimeStamp = int(time())
-    timeStampLock.release()
+    logWithDate('Movement detected..')
+    if not state.getCurrentlyRecording():        
+        filenameRep = datetime.now().strftime('%H%M%S_%d%m%Y')
+        try:
+            camera.start_recording(filenameRep + '.h264')
+        except PermissionError:
+            logWithDate('Permissions unsufficient to create a video file in pwd')
+        state.setCurrentlyRecording(True)
+        logWithDate('Recording ' + filenameRep)
+    state.setLatestTimeStamp(int(time()))
 
 def attemptToStopRecording():
-    global currentlyRecording
-    global currentTimeStamp
-    print('Attempting to stop recording')
+    logWithDate('Attempting to stop recording, in a dedicated thread')
     sleep(timeout)
-    timeStampLock.acquire()
-    if int(time()) - currentTimeStamp >= timeout:
-        timeStampLock.release()
-        currentlyRecordingLock.acquire()
-        if currentlyRecording:
+    if int(time()) - state.getLatestTimeStamp() >= timeout:
+        logWithDate('Timeout passed before ' + int(time()) + ' with ' + state.getLatestTimeStamp())
+        if state.getCurrentlyRecording:
             camera.stop_recording()
-            currentlyRecording = False
-        currentlyRecordingLock.release()
-        print('Stopped recording')
-    else:
-        timeStampLock.release()
-    print('Attempt finished')
+            state.setCurrentlyRecording(False)
+        logWithDate('Stopped recording')
+    logWithDate('Attempt finished')
 
 def stopRecording(device):
-    print('No movement is being detected')
-    timeStampLock.acquire()
-    currentTimeStamp = int(time())
-    timeStampLock.release()
+    logWithDate('No movement is being detected')
+    state.setLatestTimeStamp(int(time()))
     threading.Thread(target = attemptToStopRecording).start()
 
 pir.when_motion = startRecording
 pir.when_no_motion = stopRecording
 
-while True:
-    sleep(100)
-    #print(('YES' if pir.motion_detected else 'nope')
-    #+ ', val:' +  str(pir.value))
-    #pir.wait_for_motion()
+input('Press Enter to exit the script')
