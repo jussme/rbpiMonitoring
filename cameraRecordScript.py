@@ -1,4 +1,4 @@
-from picamera import PiCamera
+import picamera#the inconsitency is bothering me but.. whatever?
 from gpiozero import MotionSensor
 from datetime import datetime
 from time import sleep
@@ -8,7 +8,9 @@ import sys
 import logging
 
 pir = MotionSensor(17, queue_len = 1, threshold = 0.2, sample_rate = 50)
-camera = PiCamera()
+camera = picamera.PiCamera()
+
+camera.annotate_background = picamera.Color('black')
 
 timeout = 15 if len(sys.argv) == 1 else sys.argv[1]
 
@@ -44,6 +46,12 @@ class State:
     
 state = State()
 
+def stopRecording():
+    camera.stop_recording()
+    state.setCurrentlyRecording(False)
+    logWithDate('Stopped recording')
+    camera.annotate_text = 'Stopped recording'
+
 class Counter:
     def _count(self):
         logWithDate('Starting the countdown')
@@ -51,9 +59,7 @@ class Counter:
             sleep(1)
             self.decrementCounter()
         if(state.getCurrentlyRecording()):
-            camera.stop_recording()
-            state.setCurrentlyRecording(False)
-            logWithDate('Stopped recording')
+            stopRecording()
         else:
             logWithDate('Not recording, nothing to stop')
     
@@ -105,8 +111,10 @@ def startRecording(device):
         logWithDate('Recording ' + filenameRep)
     else:
         counter.refreshCounter()
+    camera.annotate_text = 'movement: ' + datetime.now().strftime(dateFormat)
 
 def stopRecording(device):
+    camera.annotate_text = 'movement stopped: ' + datetime.now().strftime(dateFormat)
     logWithDate('Movement stopped')
     if state.getCurrentlyRecording() and not counter.getCurrentlyCounting():
         counter.start()
