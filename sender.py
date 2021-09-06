@@ -14,7 +14,7 @@ camera = picamera.PiCamera()
 camera.annotate_background = picamera.Color('black')
 
 connection = socket.socket()
-connection.connect('192.168.100.16', 60000)
+connection.connect(('192.168.100.16', 60000))
 
 timeout = 15 if len(sys.argv) == 1 else sys.argv[1]
 
