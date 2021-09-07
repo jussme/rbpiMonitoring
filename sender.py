@@ -13,16 +13,25 @@ camera = picamera.PiCamera()
 
 camera.annotate_background = picamera.Color('black')
 
-connection = socket.socket()
-connection.connect(('192.168.100.16', 60000))
+timeout = 15
+serverIP = ''
+serverPort = 0
 
-timeout = 15 if len(sys.argv) == 1 else sys.argv[1]
+if len(sys.argv) == 3:
+    serverIP = sys.argv[1]
+    serverPort = int(sys.argv[2])
+else:
+    if len(sys.argv) == 4:
+        timeout = int(sys.argv[3])
+    else:
+        print('Invalid arguments\n<serverIP> <serverPort> <OPTIONAL timeout>')
+        exit()
 
 dateFormat = '%d%m%Y_%H%M%S'
 
 try:
     logging.basicConfig(filename='logFile.log', level=logging.INFO)
-except PermissionError:
+except:
     print('Permissions unsufficient to create a log file in pwd')
 
 def logWithDate(message):
@@ -50,46 +59,48 @@ class State:
     
 state = State()
 
-def stopRecording():
-    camera.stop_recording()
-    state.setCurrentlyRecording(False)
-    logWithDate('Stopped recording')
-    camera.annotate_text = 'Stopped recording'
-
 class Counter:
-    def _count(self):
+    def _stopRecording(self, camera):
+        camera.stop_recording()
+        #connectionFile.flush()
+        state.setCurrentlyRecording(False)
+        logWithDate('Stopped recording')
+        camera.annotate_text = 'Stopped recording'
+    
+    def _count(self, camera):
         logWithDate('Starting the countdown')
-        while self.readCounter() > 0:
+        while self._readCounter() > 0:
             sleep(1)
-            self.decrementCounter()
+            self._decrementCounter()
         if(state.getCurrentlyRecording()):
-            stopRecording()
+            self._stopRecording(camera)
         else:
             logWithDate('Not recording, nothing to stop')
     
     def __init__(self, startingVal):
         self._counterStartingVal = startingVal
         self._counterLock = threading.Lock()
-        self._thread = threading.Thread(target = self._count)
-        logWithDate('Attempting to stop recording, in a dedicated thread')
+        self._thread = threading.Thread(target = self._count)#not going to be started
     
     def getCurrentlyCounting(self):
-        return True if self._thread.is_alive() else False
+        counting = True if self._thread.is_alive() else False
+        logWithDate('getCurrentlyCounting returns ' + str(counting))
+        return counting
     
-    def start(self):
+    def start(self, camera):
         #if not self._thread.is_alive(): i trust my code x) start is called only in one function,
         #replaced with a dedicated function and a condition in an 'if' 
         self._counter = self._counterStartingVal
-        self._thread = threading.Thread(target = self._count)
+        self._thread = threading.Thread(target = self._count, args = (camera,))
         self._thread.start()
     
-    def decrementCounter(self):
+    def _decrementCounter(self):
         self._counterLock.acquire()
         self._counter = self._counter - 1
         self._counterLock.release()
         logWithDate('Counter decremented to ' + str(self._counter))
     
-    def readCounter(self):
+    def _readCounter(self):
         self._counterLock.acquire()
         counterState = self._counter
         self._counterLock.release()
@@ -103,14 +114,20 @@ class Counter:
     
 counter = Counter(timeout)
     
+def startCameraRecording(camera, serverIP, serverPort):
+    connectionSocket = socket.socket()
+    connectionSocket.connect((serverIP, serverPort))
+    connectionFile = connectionSocket.makefile('wb')
+    camera.start_recording(connectionFile, 'h264')
+    
 def startRecording(device):
     logWithDate('Movement detected..')
     if not state.getCurrentlyRecording():        
         filenameRep = datetime.now().strftime(dateFormat)
         try:
-            camera.start_recording(connection, filenameRep + '.h264')
-        except PermissionError:
-            logWithDate('Permissions unsufficient to create a video file in pwd')
+            startCameraRecording(camera, serverIP, serverPort)
+        except Exception as e:
+            logWithDate('startRecording(device) exception:\n' + str(e))
         state.setCurrentlyRecording(True)
         logWithDate('Recording ' + filenameRep)
     else:
@@ -121,7 +138,7 @@ def stopRecording(device):
     camera.annotate_text = 'movement stopped: ' + datetime.now().strftime(dateFormat)
     logWithDate('Movement stopped')
     if state.getCurrentlyRecording() and not counter.getCurrentlyCounting():
-        counter.start()
+        counter.start(camera)
     else:
         logWithDate('Not starting the counter')
 
@@ -130,4 +147,5 @@ pir.when_no_motion = stopRecording
 
 input('Press Enter to exit the script')
 
-connection.close()
+connectionFile.close()
+connectionSocket.close()
