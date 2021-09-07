@@ -67,3 +67,4 @@ threading.Thread(target = readFiles, args = (serverSocket,)).start()
 input('Press enter to exit')
 
 serverSocket.close()
+
