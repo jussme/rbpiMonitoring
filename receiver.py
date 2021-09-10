@@ -7,6 +7,15 @@ from datetime import datetime
 dateFormat = '%d%m%Y_%H%M%S'
 timeoutSecs = 10
 
+recFolder = ''
+serverLocalPort = 0
+
+if len(os.argv) != 2:
+    exit(1)
+else:
+    recFolder = os.argv[1]
+    serverLocalPort = int(os.argv[2])
+
 try:
     logging.basicConfig(filename='logFile.log', level=logging.INFO)
 except PermissionError:
@@ -20,13 +29,13 @@ logWithDate('\n\nStarting program')
 def createFile(filePath):
     if not os.path.isfile(filePath):
         try:
-            open(filePath, "x")
+            open(recFolder + filePath, "x")
         except Exception as e:
             print(str(e))
             exit(1);
 
 serverSocket = socket.socket()
-serverSocket.bind(('0.0.0.0', 60000))
+serverSocket.bind(('0.0.0.0', serverLocalPort))
 serverSocket.listen(0)
 
 def readFile(connectionSocket):
