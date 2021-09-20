@@ -1,11 +1,17 @@
-FROM python
+FROM python:3
 
-WORKDIR ~/monitoring
+ENV WORK_DIR=/monitoring
 
-COPY receiver.py
+WORKDIR $WORK_DIR
 
-VOLUME /recordings
+COPY receiver.py ./
 
-ENTRYPOINT ["receiver.py"]
+COPY quickstart.py ./
 
-CMD ["/recordings/"]
+RUN ["mkdir", "recordings"]
+
+RUN ["pip", "install", "--upgrade", "google-api-python-client", "google-auth-httplib2", "google-auth-oauthlib"]
+
+ENTRYPOINT ["python3","./receiver.py"]
+
+CMD ["recordings","60000"]

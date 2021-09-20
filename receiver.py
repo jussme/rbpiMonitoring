@@ -1,50 +1,21 @@
 import socket
 import os
+import sys
 import threading
 import logging
 from datetime import datetime
+import quickstart
 
-dateFormat = '%d%m%Y_%H%M%S'
-timeoutSecs = 10
-
-recFolder = ''
-serverLocalPort = 0
-
-if len(os.argv) != 2:
-    exit(1)
-else:
-    recFolder = os.argv[1]
-    serverLocalPort = int(os.argv[2])
-
-try:
-    logging.basicConfig(filename='logFile.log', level=logging.INFO)
-except PermissionError:
-    print('Permissions unsufficient to create a log file in pwd')
-
-def logWithDate(message):
-    logging.info(datetime.now().strftime(dateFormat) + '\t' + message)
-
-logWithDate('\n\nStarting program')
-
-def createFile(filePath):
-    if not os.path.isfile(filePath):
-        try:
-            open(recFolder + filePath, "x")
-        except Exception as e:
-            print(str(e))
-            exit(1);
-
-serverSocket = socket.socket()
-serverSocket.bind(('0.0.0.0', serverLocalPort))
-serverSocket.listen(0)
-
-def readFile(connectionSocket):
+def readFile(connectionSocket, recordingsDir):
     logWithDate('Reading...')
-    connectionSocket.settimeout(timeoutSecs)
+    connectionSocket.settimeout(15)
     connectionFile = connectionSocket.makefile('rb')
-    filenameRep = "R" + datetime.now().strftime(dateFormat) + ".h264"
-    createFile(filenameRep)
-    with open(filenameRep, 'wb') as recordingFile:
+    if not recordingsDir.endswith('/'):
+        recordingsDir = recordingsDir + '/'
+    fileName = "R" + datetime.now().strftime(dateFormat) + ".h264"
+    filePath = recordingsDir + fileName
+    createFile(filePath)
+    with open(filePath, 'wb') as recordingFile:
         try:
             while True:
                 data = connectionFile.read(1024)
@@ -57,23 +28,84 @@ def readFile(connectionSocket):
     connectionFile.close()
     
     logWithDate('File has been saved')
+    
+    return filePath
 
-logWithDate('Listening...')
+def readFiles(serverSocket, recordingsDir):
+        logWithDate('Listening...')
+        while True:
+            try:
+                connectionSocket = serverSocket.accept()[0]
+                filePath = readFile(connectionSocket, recordingsDir)
+                connectionSocket.close()
+                consumeFile(filePath)
+            except Exception as e:
+                #doesnt intercept the exit() exception?
+                #consumed somewhere lower?
+                logWithDate('readFiles exception: ' + str(e))
+    
+def consumeFile(filePath):
+    folderName = datetime.now().strftime("%d%m%Y") 
+    folderID = quickstart.createFolder(folderName)
+    threading.Thread(target=targetF, args=(filePath, folderID)).start()
+    
+def setupLogging(dateFormat):
+    try:
+        logging.basicConfig(filename='logFile.log', level=logging.DEBUG)
+    except PermissionError:
+        print('Permissions unsufficient to create a log file in pwd')
+        
+#method wrapping logging, cant do "enums"
+def logWithDate(message, logType='info'):
+    logMessage = datetime.now().strftime(dateFormat) + '\t' + message
+    if logType == 'info':
+        logging.info(logMessage)
+    else:
+        if logType == 'exception':
+            logging.exception(message)
+    
+def main():
+    dateFormat='%d%m%Y_%H%M%S'
+    setupLogging(dateFormat)
+    logWithDate('\n\nStarting program')
+    
+    #create recordings dir if doesnt exist
+    try:
+        os.mkdir(recFolder)
+        logWithDate('recordings dir created')
+    except FileExistsError:
+        logWithDate('recordings dir existed')
 
-def readFiles(serverSocket):
-    while True:
-        try:
-            connectionSocket = serverSocket.accept()[0]
-        finally:
-            #doesnt intercept the exit() exception?
-            #consumed somewhere lower?
-            serverSocket.close()
-        readFile(connectionSocket)
-        connectionSocket.close()
+    def createFile(filePath):
+        if not os.path.isfile(filePath):
+            try:
+                open(filePath, "x")
+            except Exception as e:
+                logWithDate(e,logType='exception')
+                exit(1);
 
-threading.Thread(target = readFiles, args = (serverSocket,)).start()
+    #launch
+    serverSocket = socket.socket()
+    serverSocket.bind(('0.0.0.0', serverLocalPort))
+    serverSocket.listen(0)
+    
+    if deleteLocal:
+        targetF = quickstart.moveFileOnline
+    else:
+        targetF = quickstart.uploadFile
+    
+    readFiles(serverSocket, recFolder)
 
-input('Press enter to exit')
+    serverSocket.close()
 
-serverSocket.close()
-
+if __name__ == "__main__":
+    if len(sys.argv) == 4:
+        recFolder = sys.argv[1]
+        serverLocalPort = int(sys.argv[2])
+        deleteLocal = bool(sys.argv[3])
+        main()
+    else:
+        print('Invalid arguments\n<recordingDirPath> <serverLocalPort> <deleteLocalFiles>')
+else:
+    recFolder = input("recordingDirPath: ")
+    serverLocalPort = int(input("serverLocalPort: "))
