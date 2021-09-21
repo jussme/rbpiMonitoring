@@ -38,23 +38,38 @@ def authorizeDriveService():
 
 folderProperty = "pirecordingsfolder"
 mimeTypeFolder = "application/vnd.google-apps.folder"
-def searchFoldersListForIDByName(foldersInfo, folderName, template):
-    print(foldersInfo)
-    print("\n\n\n")
-    for folderInfo in foldersInfo:
-        if folderInfo.get("name") == folderName:
-            properties = folderInfo.get("properties", None)
-            if properties and properties.get(folderProperty, None):
-                return folderInfo.get("id")
+def fileResourceMatchesTemplate(fileRes, template):
+    for key in template:
+        print(key + ": " + str(template.get(key)) + ":" + str(fileRes.get(key)))
+        if str(template.get(key)) != str(fileRes.get(key)):
+            print(template.get(key))
+            print(fileRes.get(key))
+            print(template.get(key) != fileRes.get(key))
+            return False
+    return True
+
+def findFileRes(filesRes, resTemplate):
+    for fileRes in filesRes:
+        if fileResourceMatchesTemplate(fileRes, resTemplate):
+            print(fileRes)
+            return fileRes 
+    print(fileRes)
     return None
 
-def findTopFolderIDByName(folderName):
-    drive = authorizeDriveService()
-    response = drive.files().list(q="mimeType = 'application/vnd.google-apps.folder'", pageSize=1, fields="files(id,name,properties,trashed)").execute()
+def findFolderIDByName(drive, folderName):
+    resTemplate = {
+        "name": folderName,
+        "trashed": "False",
+        "appProperties": {
+            folderProperty: "True"
+        }
+    }
+    response = drive.files().list(q="mimeType = 'application/vnd.google-apps.folder'", pageSize=1, fields="files(id,name,appProperties,trashed)").execute()
     while True:
-        folderID = searchFoldersListForIDByName(response.get("files", []), folderName)
-        if folderID:
-            return folderID
+        folderRes = findFileRes(response.get("files", []), resTemplate)
+        if folderRes:
+            print(folderRes)
+            return folderRes.get("id")
         nextPageToken = response.get("nextPageToken", None)
         if not nextPageToken:
             break
@@ -64,9 +79,10 @@ def findTopFolderIDByName(folderName):
 
     #returns folder id
 def mkDirOnline(folderName, parentID=None):
-    folderID = findTopFolderIDByName(folderName)
+    drive = authorizeDriveService()
+    folderID = findFolderIDByName(drive, folderName)
+    print(folderID)
     if not folderID:
-        drive = authorizeDriveService()
         folderData = {
             "name": folderName,
             "mimeType": mimeTypeFolder,
