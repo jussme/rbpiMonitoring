@@ -33,28 +33,53 @@ def authorizeDriveService():
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
 
-    #disabled the cache, throws errors, isnt used anyway?
+    #disabled the cache, throws errors; isnt used anyway?
     return build('drive', 'v3', credentials=creds, cache_discovery=False)
+
+folderProperty = "pirecordingsfolder"
+mimeTypeFolder = "application/vnd.google-apps.folder"
+def searchFoldersListForIDByName(foldersInfo, folderName, template):
+    print(foldersInfo)
+    print("\n\n\n")
+    for folderInfo in foldersInfo:
+        if folderInfo.get("name") == folderName:
+            properties = folderInfo.get("properties", None)
+            if properties and properties.get(folderProperty, None):
+                return folderInfo.get("id")
+    return None
 
 def findTopFolderIDByName(folderName):
     drive = authorizeDriveService()
-    files = drive.files().list(pageSize=5, orderBy=["folder", "createdTime"])
-    print('halo?')
-    print(files)
-
+    response = drive.files().list(q="mimeType = 'application/vnd.google-apps.folder'", pageSize=1, fields="files(id,name,properties,trashed)").execute()
+    while True:
+        folderID = searchFoldersListForIDByName(response.get("files", []), folderName)
+        if folderID:
+            return folderID
+        nextPageToken = response.get("nextPageToken", None)
+        if not nextPageToken:
+            break
+        response = drive.files().list(pageToken=nextPageToken).execute()
+    
+    return None
 
     #returns folder id
-def createFolder(folderName, parentID=None):
-    findTopFolderIDByName(20092021)
-    drive = authorizeDriveService()
-    folderData = {
-        "name": folderName,
-        "mimeType": "application/vnd.google-apps.folder"
-    }
-    if parentID:
-        folderData["parents"] = [parentID]
-    folder = drive.files().create(body=folderData, fields="id").execute()
-    return folder.get("id")
+def mkDirOnline(folderName, parentID=None):
+    folderID = findTopFolderIDByName(folderName)
+    if not folderID:
+        drive = authorizeDriveService()
+        folderData = {
+            "name": folderName,
+            "mimeType": mimeTypeFolder,
+            "appProperties": {
+                folderProperty: "True",
+            }
+        }
+        if parentID:
+            folderData["parents"] = [parentID]
+        folder = drive.files().create(body=folderData, fields="id").execute()
+        folderID = folder.get("id")
+    
+    return folderID
     
 def uploadFile(filePath, parentFolderID):
     drive = authorizeDriveService()

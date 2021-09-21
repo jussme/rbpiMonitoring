@@ -42,14 +42,18 @@ def readFiles(serverSocket, recordingsDir):
             except Exception as e:
                 #doesnt intercept the exit() exception?
                 #consumed somewhere lower?
-                logWithDate('readFiles exception: ' + str(e))
+                logWithDate(e, logType='exception')
     
 def consumeFile(filePath):
     folderName = datetime.now().strftime("%d%m%Y") 
-    folderID = quickstart.createFolder(folderName)
+    folderID = quickstart.mkDirOnline(folderName)
+    if deleteLocal:
+        targetF = quickstart.moveFileOnline
+    else:
+        targetF = quickstart.uploadFile
     threading.Thread(target=targetF, args=(filePath, folderID)).start()
     
-def setupLogging(dateFormat):
+def setupLogging():
     try:
         logging.basicConfig(filename='logFile.log', level=logging.DEBUG)
     except PermissionError:
@@ -57,16 +61,23 @@ def setupLogging(dateFormat):
         
 #method wrapping logging, cant do "enums"
 def logWithDate(message, logType='info'):
-    logMessage = datetime.now().strftime(dateFormat) + '\t' + message
     if logType == 'info':
+        logMessage = datetime.now().strftime(dateFormat) + '\t' + message
         logging.info(logMessage)
     else:
         if logType == 'exception':
             logging.exception(message)
-    
+
+def createFile(filePath):
+        if not os.path.isfile(filePath):
+            try:
+                open(filePath, "x")
+            except Exception as e:
+                logWithDate(e,logType='exception')
+                exit(1);
+
 def main():
-    dateFormat='%d%m%Y_%H%M%S'
-    setupLogging(dateFormat)
+    setupLogging()
     logWithDate('\n\nStarting program')
     
     #create recordings dir if doesnt exist
@@ -76,28 +87,19 @@ def main():
     except FileExistsError:
         logWithDate('recordings dir existed')
 
-    def createFile(filePath):
-        if not os.path.isfile(filePath):
-            try:
-                open(filePath, "x")
-            except Exception as e:
-                logWithDate(e,logType='exception')
-                exit(1);
+    
 
     #launch
     serverSocket = socket.socket()
     serverSocket.bind(('0.0.0.0', serverLocalPort))
     serverSocket.listen(0)
     
-    if deleteLocal:
-        targetF = quickstart.moveFileOnline
-    else:
-        targetF = quickstart.uploadFile
-    
     readFiles(serverSocket, recFolder)
 
     serverSocket.close()
-
+    del dateFormat
+    
+dateFormat='%d%m%Y_%H%M%S'
 if __name__ == "__main__":
     if len(sys.argv) == 4:
         recFolder = sys.argv[1]
@@ -105,7 +107,8 @@ if __name__ == "__main__":
         deleteLocal = bool(sys.argv[3])
         main()
     else:
-        print('Invalid arguments\n<recordingDirPath> <serverLocalPort> <deleteLocalFiles>')
+        print('Invalid arguments\n<recordingDirPath> <serverLocalPort> <deleteLocalFilesBoolean>')
 else:
     recFolder = input("recordingDirPath: ")
     serverLocalPort = int(input("serverLocalPort: "))
+    deleteLocal = bool(input("deleteLocalFileBoolean: "))
