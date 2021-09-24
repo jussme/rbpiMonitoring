@@ -14,4 +14,4 @@ RUN ["pip", "install", "--upgrade", "google-api-python-client", "google-auth-htt
 
 ENTRYPOINT ["python3","./receiver.py"]
 
-CMD ["recordings","60000"]
+CMD ["recordings","60000","True"]

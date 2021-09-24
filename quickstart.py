@@ -10,6 +10,7 @@ from datetime import datetime
     #returns gdrive service object
 def authorizeDriveService():
     # If modifying these scopes, delete the file token.json.
+    #only app created files
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
     """Shows basic usage of the Drive v3 API.
@@ -40,40 +41,29 @@ folderProperty = "pirecordingsfolder"
 mimeTypeFolder = "application/vnd.google-apps.folder"
 def fileResourceMatchesTemplate(fileRes, template):
     for key in template:
-        print(key + ": " + str(template.get(key)) + ":" + str(fileRes.get(key)))
         if str(template.get(key)) != str(fileRes.get(key)):
-            print(template.get(key))
-            print(fileRes.get(key))
-            print(template.get(key) != fileRes.get(key))
             return False
     return True
 
 def findFileRes(filesRes, resTemplate):
     for fileRes in filesRes:
         if fileResourceMatchesTemplate(fileRes, resTemplate):
-            print(fileRes)
-            return fileRes 
-    print(fileRes)
+            return fileRes
     return None
 
 def findFolderIDByName(drive, folderName):
     resTemplate = {
         "name": folderName,
         "trashed": "False",
-        "appProperties": {
-            folderProperty: "True"
-        }
     }
-    response = drive.files().list(q="mimeType = 'application/vnd.google-apps.folder'", pageSize=1, fields="files(id,name,appProperties,trashed)").execute()
+    nextPageToken = None
     while True:
+        response = drive.files().list(q="mimeType = 'application/vnd.google-apps.folder'", pageToken=nextPageToken, fields="nextPageToken, files(id,name,trashed)").execute()
         folderRes = findFileRes(response.get("files", []), resTemplate)
         if folderRes:
-            print(folderRes)
             return folderRes.get("id")
-        nextPageToken = response.get("nextPageToken", None)
         if not nextPageToken:
             break
-        response = drive.files().list(pageToken=nextPageToken).execute()
     
     return None
 
@@ -81,14 +71,10 @@ def findFolderIDByName(drive, folderName):
 def mkDirOnline(folderName, parentID=None):
     drive = authorizeDriveService()
     folderID = findFolderIDByName(drive, folderName)
-    print(folderID)
     if not folderID:
         folderData = {
             "name": folderName,
-            "mimeType": mimeTypeFolder,
-            "appProperties": {
-                folderProperty: "True",
-            }
+            "mimeType": mimeTypeFolder
         }
         if parentID:
             folderData["parents"] = [parentID]
