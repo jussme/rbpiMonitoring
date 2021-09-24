@@ -91,8 +91,4 @@ def uploadFile(filePath, parentFolderID):
     }
     media = MediaFileUpload(filePath, resumable=True)
     drive.files().create(body=fileData, media_body=media).execute()
-   
-def moveFileOnline(filePath, parentFolderID):
-    uploadFile(filePath, parentFolderID)
-    os.remove(filePath)
-    
+      

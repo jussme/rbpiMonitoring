@@ -48,7 +48,11 @@ def consumeFile(filePath):
     folderName = datetime.now().strftime("%d%m%Y") 
     folderID = quickstart.mkDirOnline(folderName)
     if deleteLocal:
-        targetF = quickstart.moveFileOnline
+        def thread(*args):
+            quickstart.uploadFile(*args)
+            logging.info('Deleting file: ' + args[0])
+            os.remove(args[0])
+        targetF = thread
     else:
         targetF = quickstart.uploadFile
     threading.Thread(target=targetF, args=(filePath, folderID)).start()
@@ -58,14 +62,6 @@ def setupLogging():
         logging.basicConfig(filename='logFile.log', level=logging.DEBUG, format='%(asctime)s %(message)s')
     except PermissionError:
         print('Permissions unsufficient to create a log file in pwd')
-        
-#method wrapping logging, cant do "enums"
-def logWithDate(message, logType='info'):
-    if logType == 'info':
-        logging.info(logMessage)
-    else:
-        if logType == 'exception':
-            logging.exception(message)
 
 def createFile(filePath):
         if not os.path.isfile(filePath):
@@ -86,8 +82,6 @@ def main():
     except FileExistsError:
         logging.info('recordings dir existed')
 
-    
-
     #launch
     serverSocket = socket.socket()
     serverSocket.bind(('0.0.0.0', serverLocalPort))
@@ -102,7 +96,7 @@ if __name__ == "__main__":
     if len(sys.argv) == 4:
         recFolder = sys.argv[1]
         serverLocalPort = int(sys.argv[2])
-        deleteLocal = bool(sys.argv[3])
+        deleteLocal = sys.argv[3] == 'True'
         main()
     else:
         print('Invalid arguments\n<recordingDirPath> <serverLocalPort> <deleteLocalFilesBoolean>')
